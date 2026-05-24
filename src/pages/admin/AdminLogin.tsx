@@ -55,11 +55,16 @@ const AdminLogin: React.FC = () => {
       localStorage.setItem('token', res.data.token)
       localStorage.setItem('adminUser', JSON.stringify(res.data.user))
       localStorage.setItem('siteCode', res.data.user.siteCode)
+      localStorage.setItem('adminAuthenticated', 'true')
       
       // Redirect to dashboard
       navigate('/admin/dashboard')
     } catch (err: any) {
-      setError(err.response?.data?.message || 'Invalid email or password')
+      if (!err.response) {
+        setError('Cannot reach server. It may be starting up — please wait 30 seconds and try again.')
+      } else {
+        setError(err.response.data?.message || 'Invalid email or password')
+      }
     } finally {
       setIsLoading(false)
     }
