@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom'
 import { FaPlus, FaEdit, FaTrash, FaChevronLeft, FaChevronRight } from 'react-icons/fa'
 import AdminLayout from '../../components/AdminLayout'
 import { API_BASE_URL } from '../../config/api'
+import './MenuManagement.css'
 
 type MenuItem = {
   id: number
@@ -14,16 +15,16 @@ type MenuItem = {
   foodType?: 'veg' | 'non-veg'
 }
 
+const CATEGORIES = ['Starters', 'Main Course', 'Desserts', 'Beverages']
+const ITEMS_PER_PAGE = 10
+
 const MenuManagement: React.FC = () => {
   const navigate = useNavigate()
   const [localMenuItems, setLocalMenuItems] = useState<MenuItem[]>([])
   const [loading, setLoading] = useState(true)
   const [editingItem, setEditingItem] = useState<MenuItem | null>(null)
   const [showAddForm, setShowAddForm] = useState(false)
-  const [expandedId, setExpandedId] = useState<number | null>(null)
-  const [isMobile, setIsMobile] = useState(window.innerWidth <= 768)
   const [currentPage, setCurrentPage] = useState(1)
-  const itemsPerPage = 10
 
   const [formData, setFormData] = useState({
     name: '',
@@ -31,17 +32,8 @@ const MenuManagement: React.FC = () => {
     category: 'Starters',
     image: '',
     description: '',
-    foodType: 'veg' as 'veg' | 'non-veg'
+    foodType: 'veg' as 'veg' | 'non-veg',
   })
-
-  const categories = ['Starters', 'Main Course', 'Desserts', 'Beverages']
-
-  // Responsive detection
-  useEffect(() => {  
-    const handleResize = () => setIsMobile(window.innerWidth <= 768)
-    window.addEventListener('resize', handleResize)
-    return () => window.removeEventListener('resize', handleResize)
-  }, [])
 
   useEffect(() => {
     const isAuthenticated = localStorage.getItem('adminAuthenticated')
@@ -51,24 +43,14 @@ const MenuManagement: React.FC = () => {
   useEffect(() => {
     const fetchMenuItems = async () => {
       try {
-        // Get siteCode from URL first, then localStorage as fallback
         const urlParams = new URLSearchParams(window.location.search)
         let siteCode = urlParams.get('siteCode') || localStorage.getItem('siteCode') || ''
-        
-        // Ensure siteCode is uppercase for consistency
         siteCode = siteCode.toUpperCase()
-        
-        // Store in localStorage if came from URL
         if (urlParams.get('siteCode') && !localStorage.getItem('siteCode')) {
           localStorage.setItem('siteCode', siteCode)
         }
-        
-        console.log('Admin: Fetching menu items with siteCode:', siteCode)
-        
         const response = await fetch(`${API_BASE_URL}/menu?siteCode=${siteCode}`, {
-          headers: {
-            'x-site-code': siteCode
-          }
+          headers: { 'x-site-code': siteCode },
         })
         if (response.ok) {
           const data = await response.json()
@@ -83,14 +65,16 @@ const MenuManagement: React.FC = () => {
     fetchMenuItems()
   }, [])
 
+  const getSiteCode = () => {
+    const urlParams = new URLSearchParams(window.location.search)
+    return (urlParams.get('siteCode') || localStorage.getItem('siteCode') || '').toUpperCase()
+  }
+
   const handleInputChange = (
     e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>
   ) => {
     const { name, value } = e.target
-    setFormData(prev => ({
-      ...prev,
-      [name]: value
-    }))
+    setFormData(prev => ({ ...prev, [name]: value }))
   }
 
   const handleEdit = (item: MenuItem) => {
@@ -101,37 +85,26 @@ const MenuManagement: React.FC = () => {
       category: item.category,
       image: item.image,
       description: item.description,
-      foodType: item.foodType || 'veg'
+      foodType: item.foodType || 'veg',
     })
     setShowAddForm(true)
-  }
-
-  const getSiteCode = () => {
-    const urlParams = new URLSearchParams(window.location.search)
-    let siteCode = urlParams.get('siteCode') || localStorage.getItem('siteCode') || ''
-    return siteCode.toUpperCase()
+    window.scrollTo({ top: 0, behavior: 'smooth' })
   }
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     const siteCode = getSiteCode()
-
     try {
       if (editingItem) {
         const response = await fetch(`${API_BASE_URL}/menu/${editingItem.id}`, {
           method: 'PUT',
-          headers: { 
-            'Content-Type': 'application/json',
-            'x-site-code': siteCode
-          },
-          body: JSON.stringify(formData)
+          headers: { 'Content-Type': 'application/json', 'x-site-code': siteCode },
+          body: JSON.stringify(formData),
         })
         if (response.ok) {
           const updatedItem = await response.json()
           setLocalMenuItems(prev =>
-            prev.map(item =>
-              item.id === editingItem.id ? updatedItem.menuItem : item
-            )
+            prev.map(item => (item.id === editingItem.id ? updatedItem.menuItem : item))
           )
           setEditingItem(null)
           alert('✅ Item updated successfully!')
@@ -143,17 +116,12 @@ const MenuManagement: React.FC = () => {
           category: formData.category,
           image: formData.image,
           description: formData.description,
-          foodType: formData.foodType
-          // Note: id is NOT sent - backend will auto-generate unique id
+          foodType: formData.foodType,
         }
-        console.log('Sending menu item data:', newItemData)
         const response = await fetch(`${API_BASE_URL}/menu`, {
           method: 'POST',
-          headers: { 
-            'Content-Type': 'application/json',
-            'x-site-code': siteCode
-          },
-          body: JSON.stringify(newItemData)
+          headers: { 'Content-Type': 'application/json', 'x-site-code': siteCode },
+          body: JSON.stringify(newItemData),
         })
         if (response.ok) {
           const data = await response.json()
@@ -161,75 +129,62 @@ const MenuManagement: React.FC = () => {
           alert('✅ New item added successfully!')
         } else {
           const errorText = await response.text()
-          console.error('Error response:', errorText)
           alert('❌ Error: ' + errorText)
         }
       }
     } catch (error) {
-      console.error('Error saving menu item:', error)
       alert('❌ Error saving item: ' + (error instanceof Error ? error.message : 'Unknown error'))
     }
-
     resetForm()
   }
 
-
-const handleDelete = async (id: number) => {
-  if (window.confirm('Are you sure you want to delete this item?')) {
+  const handleDelete = async (id: number) => {
+    if (!window.confirm('Are you sure you want to delete this item?')) return
     try {
       const siteCode = getSiteCode()
       const response = await fetch(`${API_BASE_URL}/menu/${id}`, {
         method: 'DELETE',
-        headers: {
-          'x-site-code': siteCode
-        }
+        headers: { 'x-site-code': siteCode },
       })
       if (response.ok) {
-        setLocalMenuItems((prev) => prev.filter((item) => item.id !== id))
+        setLocalMenuItems(prev => prev.filter(item => item.id !== id))
         alert('🗑️ Item deleted!')
       }
-    } catch (error) {
-      console.error('Error deleting menu item:', error)
+    } catch {
       alert('❌ Error deleting item')
     }
   }
-}
 
-const resetForm = () => {
-  setFormData({
-    name: '',
-    price: '',
-    category: 'Starters',
-    image: '',
-    description: '',
-    foodType: 'veg'
-  })
-  setShowAddForm(false)
-  setEditingItem(null)
-}
-
-
-  const toggleExpand = (id: number) => {
-    if (isMobile) {
-      setExpandedId(prev => (prev === id ? null : id))
-    }
+  const resetForm = () => {
+    setFormData({ name: '', price: '', category: 'Starters', image: '', description: '', foodType: 'veg' })
+    setShowAddForm(false)
+    setEditingItem(null)
   }
 
-  // Pagination logic
-  const indexOfLastItem = currentPage * itemsPerPage
-  const indexOfFirstItem = indexOfLastItem - itemsPerPage
-  const currentItems = localMenuItems.slice(indexOfFirstItem, indexOfLastItem)
-  const totalPages = Math.ceil(localMenuItems.length / itemsPerPage)
+  // Pagination
+  const totalPages = Math.ceil(localMenuItems.length / ITEMS_PER_PAGE)
+  const indexOfFirst = (currentPage - 1) * ITEMS_PER_PAGE
+  const currentItems = localMenuItems.slice(indexOfFirst, indexOfFirst + ITEMS_PER_PAGE)
 
-  const paginate = (pageNumber: number) => setCurrentPage(pageNumber)
+  const paginationPages = (): (number | '...')[] => {
+    if (totalPages <= 5) return Array.from({ length: totalPages }, (_, i) => i + 1)
+    const pages: (number | '...')[] = []
+    for (let i = 1; i <= totalPages; i++) {
+      if (i === 1 || i === totalPages || Math.abs(i - currentPage) <= 1) {
+        pages.push(i)
+      } else if (pages[pages.length - 1] !== '...') {
+        pages.push('...')
+      }
+    }
+    return pages
+  }
 
-  // Show loading state
   if (loading) {
     return (
       <AdminLayout title="Menu Management">
         <div className="d-flex justify-content-center align-items-center" style={{ height: '50vh' }}>
           <div className="spinner-border text-primary" role="status">
-            <span className="visually-hidden">Loading...</span>
+            <span className="visually-hidden">Loading…</span>
           </div>
         </div>
       </AdminLayout>
@@ -238,48 +193,52 @@ const resetForm = () => {
 
   return (
     <AdminLayout title="Menu Management">
-      <div
-        className="menu-management-container"
-        style={{ backgroundColor: '#f8f9fa', padding: '20px', minHeight: '100vh' , marginTop: '50px'}}
-      >
-        {/* Header */}
-        <div className="d-flex justify-content-between align-items-center mb-4 flex-wrap">
-          <h1 className="display-6 fw-bold text-primary mb-2">Menu Management</h1>
-          <button className="btn btn-primary" onClick={() => setShowAddForm(true)}>
-            <FaPlus className="me-2" /> Add New Item
+      <div className="menu-page">
+
+        {/* ── Page Header ── */}
+        <div className="menu-page-header">
+          <div>
+            <h1 className="menu-page-title">Menu Management</h1>
+            <p className="menu-page-subtitle">
+              {localMenuItems.length} item{localMenuItems.length !== 1 ? 's' : ''} &middot; {CATEGORIES.length} categories
+            </p>
+          </div>
+          <button
+            className="btn btn-primary btn-add-item"
+            onClick={() => { resetForm(); setShowAddForm(true) }}
+          >
+            <FaPlus /> Add New Item
           </button>
         </div>
 
-        {/* Add/Edit Form */}
+        {/* ── Add / Edit Form ── */}
         {(showAddForm || editingItem) && (
-          <div
-            className="card shadow-sm mb-4"
-            style={{ borderRadius: '12px', overflow: 'hidden', maxWidth: '900px', margin: 'auto' }}
-          >
-            <div className="card-header bg-primary text-white">
-              <h5 className="mb-0">{editingItem ? 'Edit Menu Item' : 'Add New Menu Item'}</h5>
+          <div className="menu-form-card">
+            <div className="menu-form-header">
+              <h5>{editingItem ? '✏️ Edit Menu Item' : '➕ Add New Menu Item'}</h5>
             </div>
-            <div className="card-body">
+            <div className="menu-form-body">
               <form onSubmit={handleSubmit}>
                 <div className="row g-3">
-                  <div className="col-md-6">
-                    <label htmlFor="name" className="form-label">
-                      Name
-                    </label>
+
+                  {/* Name */}
+                  <div className="col-12 col-md-6">
+                    <label htmlFor="name" className="form-label fw-semibold">Item Name</label>
                     <input
                       type="text"
                       className="form-control"
                       id="name"
                       name="name"
+                      placeholder="e.g. Butter Chicken"
                       value={formData.name}
                       onChange={handleInputChange}
                       required
                     />
                   </div>
-                  <div className="col-md-3">
-                    <label htmlFor="price" className="form-label">
-                      Price (₹)
-                    </label>
+
+                  {/* Price */}
+                  <div className="col-6 col-md-3">
+                    <label htmlFor="price" className="form-label fw-semibold">Price (₹)</label>
                     <input
                       type="number"
                       className="form-control"
@@ -292,10 +251,10 @@ const resetForm = () => {
                       required
                     />
                   </div>
-                  <div className="col-md-3">
-                    <label htmlFor="category" className="form-label">
-                      Category
-                    </label>
+
+                  {/* Category */}
+                  <div className="col-6 col-md-3">
+                    <label htmlFor="category" className="form-label fw-semibold">Category</label>
                     <select
                       className="form-select"
                       id="category"
@@ -304,56 +263,48 @@ const resetForm = () => {
                       onChange={handleInputChange}
                       required
                     >
-                      {categories.map(category => (
-                        <option key={category} value={category}>
-                          {category}
-                        </option>
+                      {CATEGORIES.map(cat => (
+                        <option key={cat} value={cat}>{cat}</option>
                       ))}
                     </select>
                   </div>
+
+                  {/* Food Type */}
                   <div className="col-12">
-                    <label className="form-label">Food Type</label>
-                    <div className="d-flex gap-4">
-                      <div className="form-check">
+                    <label className="form-label fw-semibold">Food Type</label>
+                    <div className="food-type-group">
+                      <label className={`food-type-option${formData.foodType === 'veg' ? ' active veg' : ''}`}>
                         <input
-                          className="form-check-input"
                           type="radio"
                           name="foodType"
-                          id="veg"
                           value="veg"
                           checked={formData.foodType === 'veg'}
-                          onChange={(e) => setFormData(prev => ({ ...prev, foodType: e.target.value as 'veg' | 'non-veg' }))}
-                          required
+                          onChange={() => setFormData(prev => ({ ...prev, foodType: 'veg' }))}
                         />
-                        <label className="form-check-label" htmlFor="veg">
-                          Veg
-                        </label>
-                      </div>
-                      <div className="form-check">
+                        <span className="food-dot food-dot-veg"></span>
+                        Vegetarian
+                      </label>
+                      <label className={`food-type-option${formData.foodType === 'non-veg' ? ' active nonveg' : ''}`}>
                         <input
-                          className="form-check-input"
                           type="radio"
                           name="foodType"
-                          id="non-veg"
                           value="non-veg"
                           checked={formData.foodType === 'non-veg'}
-                          onChange={(e) => setFormData(prev => ({ ...prev, foodType: e.target.value as 'veg' | 'non-veg' }))}
-                          required
+                          onChange={() => setFormData(prev => ({ ...prev, foodType: 'non-veg' }))}
                         />
-                        <label className="form-check-label" htmlFor="non-veg">
-                          Non-Veg
-                        </label>
-                      </div>
+                        <span className="food-dot food-dot-nonveg"></span>
+                        Non-Vegetarian
+                      </label>
                     </div>
                   </div>
+
+                  {/* Image */}
                   <div className="col-12">
-                    <label htmlFor="image" className="form-label">
-                      Choose Image
-                    </label>
-                    {editingItem && editingItem.image && (
-                      <div className="mb-2">
-                        <img src={editingItem.image} alt="Current" style={{ width: '100px', height: '100px', objectFit: 'cover' }} />
-                        <small className="text-muted d-block">Current image</small>
+                    <label htmlFor="image" className="form-label fw-semibold">Item Image</label>
+                    {editingItem?.image && (
+                      <div className="current-image-preview">
+                        <img src={editingItem.image} alt="Current" />
+                        <small className="text-muted">Current image — upload new to replace</small>
                       </div>
                     )}
                     <input
@@ -362,205 +313,207 @@ const resetForm = () => {
                       id="image"
                       name="image"
                       accept="image/*"
-                      onChange={(e) => {
-                        const file = e.target.files?.[0];
+                      onChange={e => {
+                        const file = e.target.files?.[0]
                         if (file) {
-                          const reader = new FileReader();
-                          reader.onload = (event) => {
-                            setFormData(prev => ({ ...prev, image: event.target?.result as string }));
-                          };
-                          reader.readAsDataURL(file);
+                          const reader = new FileReader()
+                          reader.onload = event =>
+                            setFormData(prev => ({ ...prev, image: event.target?.result as string }))
+                          reader.readAsDataURL(file)
                         }
                       }}
                       required={!editingItem}
                     />
                   </div>
+
+                  {/* Description */}
                   <div className="col-12">
-                    <label htmlFor="description" className="form-label">
-                      Description
-                    </label>
+                    <label htmlFor="description" className="form-label fw-semibold">Description</label>
                     <textarea
                       className="form-control"
                       id="description"
                       name="description"
                       rows={3}
+                      placeholder="Describe the dish…"
                       value={formData.description}
                       onChange={handleInputChange}
                       required
                     />
                   </div>
-                  <div className="col-12 text-end">
-                    <button type="submit" className="btn btn-primary me-2">
-                      {editingItem ? 'Update Item' : 'Add Item'}
-                    </button>
-                    <button type="button" className="btn btn-secondary" onClick={resetForm}>
-                      Cancel
-                    </button>
+
+                  {/* Buttons */}
+                  <div className="col-12">
+                    <div className="form-action-row">
+                      <button type="submit" className="btn btn-primary">
+                        {editingItem ? 'Update Item' : 'Add Item'}
+                      </button>
+                      <button type="button" className="btn btn-outline-secondary" onClick={resetForm}>
+                        Cancel
+                      </button>
+                    </div>
                   </div>
+
                 </div>
               </form>
             </div>
           </div>
         )}
 
-        {/* Menu Items List */}
-        <div className="table-responsive">
-          <table className="table align-middle shadow-sm bg-white rounded">
-            <thead className="table-light">
-              <tr>
-                <th>Image</th>
-                <th>Name & Category</th>
-                <th>Description</th>
-                <th>Price</th>
-                <th>Actions</th>
-              </tr>
-            </thead>
-            <tbody>
-  {currentItems.map(item => (
-    isMobile ? (
-      <tr key={item.id}>
-        <td colSpan={5}>
-          <div className="card shadow-sm mb-3 border-0">
-            <img
-              src={item.image}
-              alt={item.name}
-              className="card-img-top"
-              style={{ height: '180px', objectFit: 'cover' }}
-            />
-            <div className="card-body">
-              <h5 className="card-title fw-bold">{item.name}</h5>
-              <p className="text-muted small mb-1">{item.category}</p>
-              <p className="card-text">{item.description}</p>
-              <h6 className="text-primary fw-bold">₹{parseFloat(item.price as string).toFixed(2)}</h6>
-
-              <div className="d-flex justify-content-end gap-2 mt-3">
-                <button
-                  className="btn btn-sm btn-outline-primary"
-                  onClick={() => handleEdit(item)}
-                >
-                  <FaEdit />
-                </button>
-                <button
-                  className="btn btn-sm btn-outline-danger"
-                  onClick={() => handleDelete(item.id)}
-                >
-                  <FaTrash />
-                </button>
-              </div>
+        {/* ── Empty State ── */}
+        {localMenuItems.length === 0 ? (
+          <div className="menu-empty-state">
+            <span className="menu-empty-icon">🍽️</span>
+            <h4>No menu items yet</h4>
+            <p className="text-muted mb-0">Click "Add New Item" to start building your menu.</p>
+          </div>
+        ) : (
+          <>
+            {/* ── Desktop Table (md+) ── */}
+            <div className="menu-table-wrapper d-none d-md-block">
+              <table className="table menu-table">
+                <thead>
+                  <tr>
+                    <th style={{ width: 72 }}>Image</th>
+                    <th>Name &amp; Category</th>
+                    <th>Description</th>
+                    <th style={{ width: 110 }}>Price</th>
+                    <th style={{ width: 100 }}>Actions</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {currentItems.map(item => (
+                    <tr key={item.id}>
+                      <td>
+                        <img src={item.image} alt={item.name} className="menu-thumb" />
+                      </td>
+                      <td>
+                        <div className="item-name-cell">
+                          <span className={`food-indicator ${item.foodType === 'non-veg' ? 'nonveg' : 'veg'}`} />
+                          <div>
+                            <strong>{item.name}</strong>
+                            <div>
+                              <span className="category-badge">{item.category}</span>
+                            </div>
+                          </div>
+                        </div>
+                      </td>
+                      <td>
+                        <span className="item-description">{item.description}</span>
+                      </td>
+                      <td>
+                        <span className="item-price">₹{parseFloat(item.price).toFixed(2)}</span>
+                      </td>
+                      <td>
+                        <div className="d-flex gap-2">
+                          <button
+                            className="btn btn-sm btn-outline-primary action-icon-btn"
+                            onClick={() => handleEdit(item)}
+                            title="Edit"
+                          >
+                            <FaEdit />
+                          </button>
+                          <button
+                            className="btn btn-sm btn-outline-danger action-icon-btn"
+                            onClick={() => handleDelete(item.id)}
+                            title="Delete"
+                          >
+                            <FaTrash />
+                          </button>
+                        </div>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
             </div>
-          </div>
-        </td>
-      </tr>
-    ) : (
-      <tr key={item.id}>
-        <td>
-          <img
-            src={item.image}
-            alt={item.name}
-            style={{ width: '60px', height: '60px', borderRadius: '8px', objectFit: 'cover' }}
-          />
-        </td>
-        <td>
-          <strong>{item.name}</strong>
-          <br />
-          <small className="text-muted">{item.category}</small>
-        </td>
-        <td className="text-muted">{item.description}</td>
-        <td className="fw-bold text-primary">
-          ₹{parseFloat(item.price as string).toFixed(2)}
-        </td>
-        <td>
-          <button
-            className="btn btn-sm btn-outline-primary me-2"
-            onClick={() => handleEdit(item)}
-          >
-            <FaEdit />
-          </button>
-          <button
-            className="btn btn-sm btn-outline-danger"
-            onClick={() => handleDelete(item.id)}
-          >
-            <FaTrash />
-          </button>
-        </td>
-      </tr>
-    )
-  ))}
-</tbody>
-          </table>
-        </div>
 
-        {/* Pagination Controls */}
-        {totalPages > 1 && (
-          <div className="d-flex justify-content-between align-items-center mt-4 px-3">
-            <span className="text-muted small">
-              Showing {indexOfFirstItem + 1} to {Math.min(indexOfLastItem, localMenuItems.length)} of {localMenuItems.length} items
-            </span>
-            <nav>
-              <ul className="pagination mb-0">
-                <li className={`page-item ${currentPage === 1 ? 'disabled' : ''}`}>
-                  <button
-                    className="page-link"
-                    onClick={() => paginate(currentPage - 1)}
-                    disabled={currentPage === 1}
-                  >
-                    <FaChevronLeft />
-                  </button>
-                </li>
-                {Array.from({ length: totalPages }, (_, i) => (
-                  <li key={i + 1} className={`page-item ${currentPage === i + 1 ? 'active' : ''}`}>
-                    <button
-                      className="page-link"
-                      onClick={() => paginate(i + 1)}
-                    >
-                      {i + 1}
-                    </button>
-                  </li>
-                ))}
-                <li className={`page-item ${currentPage === totalPages ? 'disabled' : ''}`}>
-                  <button
-                    className="page-link"
-                    onClick={() => paginate(currentPage + 1)}
-                    disabled={currentPage === totalPages}
-                  >
-                    <FaChevronRight />
-                  </button>
-                </li>
-              </ul>
-            </nav>
-          </div>
+            {/* ── Mobile Card Grid (< md) ── */}
+            <div className="menu-card-grid d-md-none">
+              {currentItems.map(item => (
+                <div key={item.id} className="menu-card">
+                  <div className="menu-card-img-wrap">
+                    <img src={item.image} alt={item.name} className="menu-card-img" />
+                    <span className={`food-tag ${item.foodType === 'non-veg' ? 'nonveg' : 'veg'}`}>
+                      {item.foodType === 'non-veg' ? '🍗 Non-Veg' : '🥦 Veg'}
+                    </span>
+                  </div>
+                  <div className="menu-card-body">
+                    <div className="menu-card-top">
+                      <h6 className="menu-card-name">{item.name}</h6>
+                      <span className="menu-card-price">₹{parseFloat(item.price).toFixed(2)}</span>
+                    </div>
+                    <span className="menu-card-category">{item.category}</span>
+                    <p className="menu-card-desc">{item.description}</p>
+                    <div className="menu-card-actions">
+                      <button
+                        className="btn btn-outline-primary btn-sm"
+                        onClick={() => handleEdit(item)}
+                      >
+                        <FaEdit className="me-1" /> Edit
+                      </button>
+                      <button
+                        className="btn btn-outline-danger btn-sm"
+                        onClick={() => handleDelete(item.id)}
+                      >
+                        <FaTrash className="me-1" /> Delete
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+
+            {/* ── Pagination ── */}
+            {totalPages > 1 && (
+              <div className="menu-pagination">
+                <span className="pagination-info">
+                  {indexOfFirst + 1}–{Math.min(indexOfFirst + ITEMS_PER_PAGE, localMenuItems.length)} of{' '}
+                  {localMenuItems.length} items
+                </span>
+                <nav aria-label="Menu pagination">
+                  <ul className="pagination mb-0">
+                    <li className={`page-item ${currentPage === 1 ? 'disabled' : ''}`}>
+                      <button
+                        className="page-link"
+                        onClick={() => setCurrentPage(p => p - 1)}
+                        disabled={currentPage === 1}
+                        aria-label="Previous"
+                      >
+                        <FaChevronLeft />
+                      </button>
+                    </li>
+                    {paginationPages().map((page, idx) =>
+                      page === '...' ? (
+                        <li key={`ellipsis-${idx}`} className="page-item disabled">
+                          <span className="page-link">…</span>
+                        </li>
+                      ) : (
+                        <li
+                          key={page}
+                          className={`page-item ${currentPage === page ? 'active' : ''}`}
+                        >
+                          <button className="page-link" onClick={() => setCurrentPage(page as number)}>
+                            {page}
+                          </button>
+                        </li>
+                      )
+                    )}
+                    <li className={`page-item ${currentPage === totalPages ? 'disabled' : ''}`}>
+                      <button
+                        className="page-link"
+                        onClick={() => setCurrentPage(p => p + 1)}
+                        disabled={currentPage === totalPages}
+                        aria-label="Next"
+                      >
+                        <FaChevronRight />
+                      </button>
+                    </li>
+                  </ul>
+                </nav>
+              </div>
+            )}
+          </>
         )}
-
-        <style>
-          {`
-            @media (max-width: 768px) {
-              table thead {
-                display: none;
-              }
-              table, table tbody, table tr, table td {
-                display: block;
-                width: 100%;
-              }
-              table tr {
-                margin-bottom: 1rem;
-                background: white;
-                border-radius: 12px;
-                box-shadow: 0 2px 6px rgba(0,0,0,0.1);
-                overflow: hidden;
-              }
-              table td {
-                padding: 10px 15px;
-                border: none;
-              }
-              table td img {
-                width: 100%;
-                height: 150px;
-                object-fit: cover;
-                border-radius: 12px 12px 0 0;
-              }
-            }
-          `}
-        </style>
       </div>
     </AdminLayout>
   )
