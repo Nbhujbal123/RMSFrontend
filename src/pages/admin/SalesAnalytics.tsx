@@ -155,7 +155,7 @@ const SalesAnalytics: React.FC = () => {
         }}
       >
         {/* Header */}
-        <div className="row mb-4" style={{ marginTop: '50px' }}>
+        <div className="row mb-4" style={{ marginTop: '0px' }}>
           <div className="col-12 d-flex flex-column flex-md-row justify-content-between align-items-md-center">
             <h1 className="display-6 fw-bold text-primary text-center text-md-start mb-3 mb-md-0">
               Sales Analytics

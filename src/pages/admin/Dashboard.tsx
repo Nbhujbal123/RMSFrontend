@@ -348,7 +348,7 @@ const Dashboard: React.FC = () => {
         <div className="mb-4">
           <h1 
             className="display-6 fw-bold" 
-            style={{ color: '#4F46E5', margin: '20px 0px', marginTop: '50px', fontSize: '2.5rem'}}
+            style={{ color: '#4F46E5', margin: '20px 0px', marginTop: '0px', fontSize: '2.5rem'}}
           >
             Admin Dashboard
           </h1>
