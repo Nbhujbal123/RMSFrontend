@@ -35,6 +35,7 @@ const SuperAdminDash = React.lazy(() => import('./pages/superadmin/SuperAdminDas
 const CreateRestaurant = React.lazy(() => import('./pages/superadmin/CreateRestaurant'))
 const ViewRestaurants = React.lazy(() => import('./pages/superadmin/ViewRestaurants'))
 const SuperAdminAnalytics = React.lazy(() => import('./pages/superadmin/SuperAdminAnalytics'))
+const ChiefDashboard = React.lazy(() => import('./pages/chief/ChiefDashboard'))
 
 // Root route handler - shows WelcomePage if siteCode exists, otherwise SuperAdminLogin
 const RootRoute = () => {
@@ -81,6 +82,7 @@ function AppContent() {
   const location = useLocation()
   const navigate = useNavigate()
   const isAdminRoute = location.pathname.startsWith('/admin')
+  const isChiefRoute = location.pathname.startsWith('/chief')
   const isSuperAdminRoute = location.pathname.startsWith('/superadmin')
   const isWelcomePage = location.pathname === '/'
   const { showToast, lastAddedItem, hideToast } = useCart()
@@ -109,8 +111,8 @@ function AppContent() {
 
   return (
     <div className="App">
-      {!isAdminRoute && !isSuperAdminRoute && !isWelcomePage && <Navbar />}
-      {!isAdminRoute && !isWelcomePage && <OrderTrackingPopup />}
+      {!isAdminRoute && !isChiefRoute && !isSuperAdminRoute && !isWelcomePage && <Navbar />}
+      {!isAdminRoute && !isChiefRoute && !isWelcomePage && <OrderTrackingPopup />}
       <main>
         <Suspense fallback={<PageLoader />}>
           <Routes>
@@ -131,6 +133,7 @@ function AppContent() {
             <Route path="/admin/reports" element={<Reports />} />
             <Route path="/admin/billing" element={<Billing />} />
             <Route path="/admin/profile" element={<AdminProfile />} />
+            <Route path="/chief/dashboard" element={<ChiefDashboard />} />
             <Route path="/superadmin" element={<SuperAdminLogin />} />
             <Route path="/superadmin/login" element={<SuperAdminLogin />} />
             <Route path="/superadmin/dashboard" element={<SuperAdminDash />} />
@@ -140,7 +143,7 @@ function AppContent() {
           </Routes>
         </Suspense>
       </main>
-      {!isAdminRoute && !isSuperAdminRoute && !isWelcomePage && <Footer />}
+      {!isAdminRoute && !isChiefRoute && !isSuperAdminRoute && !isWelcomePage && <Footer />}
       
       {/* Cart Toast Notification - Shows globally when item is added */}
       <CartToast

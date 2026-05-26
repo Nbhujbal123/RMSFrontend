@@ -56,9 +56,13 @@ const AdminLogin: React.FC = () => {
       localStorage.setItem('adminUser', JSON.stringify(res.data.user))
       localStorage.setItem('siteCode', res.data.user.siteCode)
       localStorage.setItem('adminAuthenticated', 'true')
-      
-      // Redirect to dashboard
-      navigate('/admin/dashboard')
+
+      // Redirect based on role
+      if (res.data.user.role === 'chief') {
+        navigate('/chief/dashboard')
+      } else {
+        navigate('/admin/dashboard')
+      }
     } catch (err: any) {
       if (!err.response) {
         setError('Cannot reach server. It may be starting up — please wait 30 seconds and try again.')

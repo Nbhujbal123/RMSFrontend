@@ -15,6 +15,14 @@ import {
   FaCheck,
   FaBox,
   FaCog,
+  FaUserPlus,
+  FaTimes,
+  FaEye,
+  FaEyeSlash,
+  FaUserShield,
+  FaEnvelope,
+  FaPhone,
+  FaStore,
 } from 'react-icons/fa';
 import AdminLayout from '../../components/AdminLayout';
 import '../../components/AdminLayout.css';
@@ -46,6 +54,15 @@ interface DashboardStats {
   recentOrders: Order[];
 }
 
+interface Chief {
+  _id: string;
+  name: string;
+  email: string;
+  mobile: string;
+  siteCode: string;
+  createdAt?: string;
+}
+
 const Dashboard: React.FC = () => {
   const navigate = useNavigate();
   const [stats, setStats] = useState<DashboardStats | null>(null);
@@ -55,13 +72,28 @@ const Dashboard: React.FC = () => {
   const [statusFilter, setStatusFilter] = useState<string>('ALL');
   const ordersPerPage = 10;
 
+  // Chiefs list
+  const [chiefs, setChiefs] = useState<Chief[]>([]);
+  const [chiefsLoading, setChiefsLoading] = useState(false);
+  const [successBanner, setSuccessBanner] = useState('');
+
+  // Create Chief modal state
+  const [showChiefModal, setShowChiefModal] = useState(false);
+  const [chiefForm, setChiefForm] = useState({
+    name: '', email: '', mobile: '', password: '', siteCode: ''
+  });
+  const [chiefFormError, setChiefFormError] = useState('');
+  const [chiefLoading, setChiefLoading] = useState(false);
+  const [showChiefPassword, setShowChiefPassword] = useState(false);
+
   const calculateTotal = (items: Order['items']) => {
     return items.reduce((sum, item) => sum + (item.price || 0) * (item.quantity || 0), 0);
   };
 
   useEffect(() => {
     const isAuthenticated = localStorage.getItem('adminAuthenticated');
-    if (!isAuthenticated) navigate('/admin');
+    const adminUser = JSON.parse(localStorage.getItem('adminUser') || '{}');
+    if (!isAuthenticated || adminUser.role === 'chief') navigate('/admin');
   }, [navigate]);
 
   useEffect(() => {
@@ -91,6 +123,28 @@ const Dashboard: React.FC = () => {
     };
 
     fetchStats();
+  }, []);
+
+  const fetchChiefs = async () => {
+    setChiefsLoading(true);
+    try {
+      const token = localStorage.getItem('token') || '';
+      const res = await fetch(`${API_BASE_URL}/admin/chiefs`, {
+        headers: { 'Authorization': `Bearer ${token}` },
+      });
+      if (res.ok) {
+        const data = await res.json();
+        setChiefs(data.chiefs || []);
+      }
+    } catch {
+      // silently fail — chiefs table will just stay empty
+    } finally {
+      setChiefsLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    fetchChiefs();
   }, []);
 
   const localOrders = stats?.recentOrders || [];
@@ -146,6 +200,43 @@ const Dashboard: React.FC = () => {
       console.error('Error updating order status:', error)
     }
   }
+
+  const openChiefModal = () => {
+    const siteCode = localStorage.getItem('siteCode') || '';
+    setChiefForm({ name: '', email: '', mobile: '', password: '', siteCode });
+    setChiefFormError('');
+    setShowChiefModal(true);
+  };
+
+  const handleCreateChief = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setChiefFormError('');
+    setChiefLoading(true);
+    try {
+      const token = localStorage.getItem('token') || '';
+      const res = await fetch(`${API_BASE_URL}/admin/create-chief`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`,
+        },
+        body: JSON.stringify(chiefForm),
+      });
+      const data = await res.json();
+      if (res.ok) {
+        setShowChiefModal(false);
+        setSuccessBanner(`Chief "${data.chief.name}" created successfully for ${data.chief.restaurantName || chiefForm.siteCode}!`);
+        setTimeout(() => setSuccessBanner(''), 5000);
+        fetchChiefs();
+      } else {
+        setChiefFormError(data.message || 'Failed to create chief');
+      }
+    } catch {
+      setChiefFormError('Cannot reach server. Please try again.');
+    } finally {
+      setChiefLoading(false);
+    }
+  };
 
   const getStatusBadgeClass = (status: string) => {
     switch (status) {
@@ -264,6 +355,21 @@ const Dashboard: React.FC = () => {
           {error && (
             <div className="alert alert-warning" role="alert">
               {error}
+            </div>
+          )}
+          {successBanner && (
+            <div
+              className="d-flex align-items-center gap-2 px-4 py-3 rounded-3"
+              style={{
+                background: 'linear-gradient(135deg, #dcfce7, #bbf7d0)',
+                border: '1px solid #86efac',
+                color: '#15803d',
+                fontWeight: '600',
+                fontSize: '0.95rem',
+                animation: 'fadeIn 0.3s ease',
+              }}
+            >
+              ✅ {successBanner}
             </div>
           )}
         </div>
@@ -393,8 +499,31 @@ const Dashboard: React.FC = () => {
 
         {/* Quick Actions */}
         <div className="row g-3 mb-5">
-          <div className="col-12">
-            <h5 className="fw-semibold mb-3" style={{ color: '#4F46E5' }}>Quick Actions</h5>
+          <div className="col-12 d-flex justify-content-between align-items-center">
+            <h5 className="fw-semibold mb-0" style={{ color: '#4F46E5' }}>Quick Actions</h5>
+            <button
+              className="btn d-flex align-items-center gap-2 px-4 py-2"
+              style={{
+                background: 'linear-gradient(135deg, #7C3AED, #A78BFA)',
+                color: 'white',
+                borderRadius: '12px',
+                border: 'none',
+                fontWeight: '600',
+                boxShadow: '0 2px 8px rgba(124, 58, 237, 0.35)',
+                transition: 'all 0.3s ease',
+              }}
+              onMouseEnter={e => {
+                e.currentTarget.style.transform = 'translateY(-2px)';
+                e.currentTarget.style.boxShadow = '0 6px 16px rgba(124, 58, 237, 0.45)';
+              }}
+              onMouseLeave={e => {
+                e.currentTarget.style.transform = 'translateY(0)';
+                e.currentTarget.style.boxShadow = '0 2px 8px rgba(124, 58, 237, 0.35)';
+              }}
+              onClick={openChiefModal}
+            >
+              <FaUserPlus /> Create Chief
+            </button>
           </div>
           <div className="col-6 col-md-4">
             <button
@@ -476,6 +605,199 @@ const Dashboard: React.FC = () => {
             >
               <FaChartBar /> Reports
             </button>
+          </div>
+        </div>
+
+        {/* ── Chiefs Table ── */}
+        <div className="card border-0 shadow-sm mb-5" style={{ borderRadius: '16px', overflow: 'hidden' }}>
+          {/* Table Header */}
+          <div
+            className="d-flex flex-wrap align-items-center justify-content-between px-4 py-3 gap-2"
+            style={{ background: 'linear-gradient(135deg, #7C3AED, #A78BFA)' }}
+          >
+            <div className="d-flex align-items-center gap-3">
+              <FaUserShield style={{ color: '#fff', fontSize: '1.3rem' }} />
+              <div>
+                <h5 className="mb-0 fw-bold" style={{ color: '#fff' }}>Chiefs</h5>
+                <small style={{ color: 'rgba(255,255,255,0.8)' }}>Manage your restaurant's chiefs</small>
+              </div>
+              <span
+                style={{
+                  background: 'rgba(255,255,255,0.25)',
+                  color: '#fff',
+                  borderRadius: '20px',
+                  padding: '2px 12px',
+                  fontWeight: '700',
+                  fontSize: '0.9rem',
+                  border: '1px solid rgba(255,255,255,0.35)',
+                }}
+              >
+                {chiefs.length} Total
+              </span>
+            </div>
+            <button
+              className="btn d-flex align-items-center gap-2"
+              style={{
+                background: 'rgba(255,255,255,0.2)',
+                color: '#fff',
+                border: '1px solid rgba(255,255,255,0.4)',
+                borderRadius: '10px',
+                fontWeight: '600',
+                fontSize: '0.9rem',
+              }}
+              onClick={openChiefModal}
+            >
+              <FaUserPlus /> Add Chief
+            </button>
+          </div>
+
+          {/* Desktop Table */}
+          <div className="d-none d-md-block">
+            {chiefsLoading ? (
+              <div className="text-center py-4">
+                <div className="spinner-border spinner-border-sm" style={{ color: '#7C3AED' }} role="status" />
+                <span className="ms-2 text-muted small">Loading chiefs…</span>
+              </div>
+            ) : chiefs.length === 0 ? (
+              <div className="text-center py-5">
+                <FaUserShield style={{ fontSize: '2.5rem', color: '#d8b4fe', marginBottom: '12px' }} />
+                <p className="text-muted mb-1">No chiefs created yet</p>
+                <small className="text-muted">Click "Add Chief" to create one</small>
+              </div>
+            ) : (
+              <table className="table table-hover mb-0">
+                <thead style={{ background: '#f5f3ff' }}>
+                  <tr>
+                    <th className="px-4 py-3" style={{ color: '#6b21a8', fontWeight: '700', fontSize: '0.82rem', textTransform: 'uppercase', letterSpacing: '0.5px', border: 'none' }}>#</th>
+                    <th className="py-3" style={{ color: '#6b21a8', fontWeight: '700', fontSize: '0.82rem', textTransform: 'uppercase', letterSpacing: '0.5px', border: 'none' }}>Name</th>
+                    <th className="py-3" style={{ color: '#6b21a8', fontWeight: '700', fontSize: '0.82rem', textTransform: 'uppercase', letterSpacing: '0.5px', border: 'none' }}>Email</th>
+                    <th className="py-3" style={{ color: '#6b21a8', fontWeight: '700', fontSize: '0.82rem', textTransform: 'uppercase', letterSpacing: '0.5px', border: 'none' }}>Mobile</th>
+                    <th className="py-3" style={{ color: '#6b21a8', fontWeight: '700', fontSize: '0.82rem', textTransform: 'uppercase', letterSpacing: '0.5px', border: 'none' }}>Restaurant ID</th>
+                    <th className="py-3" style={{ color: '#6b21a8', fontWeight: '700', fontSize: '0.82rem', textTransform: 'uppercase', letterSpacing: '0.5px', border: 'none' }}>Joined</th>
+                    <th className="py-3" style={{ color: '#6b21a8', fontWeight: '700', fontSize: '0.82rem', textTransform: 'uppercase', letterSpacing: '0.5px', border: 'none' }}>Role</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {chiefs.map((chief, idx) => (
+                    <tr key={chief._id} style={{ borderBottom: '1px solid #f3e8ff' }}>
+                      <td className="px-4 py-3 text-muted">{idx + 1}</td>
+                      <td className="py-3">
+                        <div className="d-flex align-items-center gap-2">
+                          <div style={{
+                            width: '36px', height: '36px', borderRadius: '50%',
+                            background: 'linear-gradient(135deg, #7C3AED, #A78BFA)',
+                            display: 'flex', alignItems: 'center', justifyContent: 'center',
+                            color: '#fff', fontWeight: '700', fontSize: '0.9rem', flexShrink: 0,
+                          }}>
+                            {chief.name.charAt(0).toUpperCase()}
+                          </div>
+                          <span className="fw-semibold" style={{ color: '#374151' }}>{chief.name}</span>
+                        </div>
+                      </td>
+                      <td className="py-3">
+                        <span className="d-flex align-items-center gap-1" style={{ color: '#6b7280', fontSize: '0.9rem' }}>
+                          <FaEnvelope style={{ color: '#A78BFA', fontSize: '0.75rem' }} />{chief.email}
+                        </span>
+                      </td>
+                      <td className="py-3">
+                        <span className="d-flex align-items-center gap-1" style={{ color: '#6b7280', fontSize: '0.9rem' }}>
+                          <FaPhone style={{ color: '#A78BFA', fontSize: '0.75rem' }} />{chief.mobile}
+                        </span>
+                      </td>
+                      <td className="py-3">
+                        <span
+                          style={{
+                            background: '#f5f3ff', color: '#7C3AED',
+                            borderRadius: '8px', padding: '3px 10px',
+                            fontFamily: 'monospace', fontWeight: '700', fontSize: '0.85rem',
+                          }}
+                        >
+                          {chief.siteCode}
+                        </span>
+                      </td>
+                      <td className="py-3" style={{ color: '#6b7280', fontSize: '0.85rem' }}>
+                        {chief.createdAt ? new Date(chief.createdAt).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' }) : '—'}
+                      </td>
+                      <td className="py-3">
+                        <span
+                          style={{
+                            background: 'linear-gradient(135deg, #7C3AED, #A78BFA)',
+                            color: '#fff', borderRadius: '20px', padding: '3px 12px',
+                            fontSize: '0.78rem', fontWeight: '700', textTransform: 'uppercase', letterSpacing: '0.5px',
+                          }}
+                        >
+                          Chief
+                        </span>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            )}
+          </div>
+
+          {/* Mobile Cards */}
+          <div className="d-md-none p-3">
+            {chiefsLoading ? (
+              <div className="text-center py-3">
+                <div className="spinner-border spinner-border-sm" style={{ color: '#7C3AED' }} role="status" />
+              </div>
+            ) : chiefs.length === 0 ? (
+              <div className="text-center py-4">
+                <FaUserShield style={{ fontSize: '2rem', color: '#d8b4fe' }} />
+                <p className="text-muted mt-2 mb-0 small">No chiefs yet. Click "Add Chief" above.</p>
+              </div>
+            ) : (
+              chiefs.map((chief, idx) => (
+                <div
+                  key={chief._id}
+                  className="p-3 mb-3 rounded-3"
+                  style={{ background: '#f5f3ff', border: '1px solid #e9d5ff' }}
+                >
+                  <div className="d-flex align-items-center gap-2 mb-2">
+                    <div style={{
+                      width: '40px', height: '40px', borderRadius: '50%', flexShrink: 0,
+                      background: 'linear-gradient(135deg, #7C3AED, #A78BFA)',
+                      display: 'flex', alignItems: 'center', justifyContent: 'center',
+                      color: '#fff', fontWeight: '700',
+                    }}>
+                      {chief.name.charAt(0).toUpperCase()}
+                    </div>
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      <div className="fw-bold" style={{ color: '#374151' }}>{chief.name}</div>
+                      <span style={{
+                        background: 'linear-gradient(135deg, #7C3AED, #A78BFA)', color: '#fff',
+                        borderRadius: '12px', padding: '1px 9px', fontSize: '0.72rem', fontWeight: '700',
+                      }}>
+                        Chief #{idx + 1}
+                      </span>
+                    </div>
+                    <span style={{
+                      background: '#fff', color: '#7C3AED', borderRadius: '8px',
+                      padding: '2px 8px', fontFamily: 'monospace', fontWeight: '700', fontSize: '0.8rem',
+                      border: '1px solid #e9d5ff',
+                    }}>
+                      {chief.siteCode}
+                    </span>
+                  </div>
+                  <div className="d-flex flex-column gap-1">
+                    <small className="d-flex align-items-center gap-2" style={{ color: '#6b7280' }}>
+                      <FaEnvelope style={{ color: '#A78BFA', flexShrink: 0 }} />
+                      <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{chief.email}</span>
+                    </small>
+                    <small className="d-flex align-items-center gap-2" style={{ color: '#6b7280' }}>
+                      <FaPhone style={{ color: '#A78BFA', flexShrink: 0 }} />{chief.mobile}
+                    </small>
+                    {chief.createdAt && (
+                      <small className="d-flex align-items-center gap-2" style={{ color: '#9ca3af' }}>
+                        <FaStore style={{ color: '#A78BFA', flexShrink: 0 }} />
+                        Joined {new Date(chief.createdAt).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' })}
+                      </small>
+                    )}
+                  </div>
+                </div>
+              ))
+            )}
           </div>
         </div>
 
@@ -834,6 +1156,235 @@ const Dashboard: React.FC = () => {
           )}
         </div>
       </div>
+      {/* ── Create Chief Modal (responsive) ── */}
+      {showChiefModal && (
+        <div
+          style={{
+            position: 'fixed', inset: 0, zIndex: 1050,
+            background: 'rgba(0,0,0,0.6)',
+            display: 'flex', alignItems: 'center', justifyContent: 'center',
+            padding: '12px',
+            overflowY: 'auto',
+          }}
+          onClick={e => { if (e.target === e.currentTarget) setShowChiefModal(false); }}
+        >
+          <div
+            style={{
+              background: '#fff',
+              borderRadius: '20px',
+              width: '100%',
+              maxWidth: '500px',
+              boxShadow: '0 24px 64px rgba(124,58,237,0.3)',
+              display: 'flex',
+              flexDirection: 'column',
+              maxHeight: 'calc(100vh - 24px)',
+              margin: 'auto',
+            }}
+          >
+            {/* Sticky Header */}
+            <div style={{
+              background: 'linear-gradient(135deg, #7C3AED, #A78BFA)',
+              borderRadius: '20px 20px 0 0',
+              padding: '20px 20px 16px',
+              display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start',
+              flexShrink: 0,
+            }}>
+              <div>
+                <h4 style={{ color: '#fff', margin: 0, fontWeight: '700', fontSize: '1.1rem', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                  <FaUserPlus /> Create Chief
+                </h4>
+                <p style={{ color: 'rgba(255,255,255,0.85)', margin: '4px 0 0', fontSize: '0.83rem' }}>
+                  Create a chief account for a restaurant
+                </p>
+              </div>
+              <button
+                onClick={() => setShowChiefModal(false)}
+                aria-label="Close"
+                style={{
+                  background: 'rgba(255,255,255,0.2)', border: 'none', borderRadius: '50%',
+                  width: '34px', height: '34px', cursor: 'pointer', color: '#fff',
+                  display: 'flex', alignItems: 'center', justifyContent: 'center',
+                  fontSize: '15px', flexShrink: 0, marginLeft: '8px',
+                }}
+              >
+                <FaTimes />
+              </button>
+            </div>
+
+            {/* Scrollable Body */}
+            <div style={{ padding: '20px', overflowY: 'auto', flex: 1 }}>
+              {chiefFormError && (
+                <div style={{
+                  background: '#fee2e2', color: '#dc2626', padding: '10px 14px',
+                  borderRadius: '10px', marginBottom: '16px', fontSize: '0.88rem',
+                  display: 'flex', alignItems: 'center', gap: '8px',
+                }}>
+                  ⚠️ {chiefFormError}
+                </div>
+              )}
+
+              <form onSubmit={handleCreateChief} noValidate>
+                {/* Row: Name + Email */}
+                <div className="row g-3 mb-3">
+                  <div className="col-12 col-sm-6">
+                    <label style={{ display: 'block', marginBottom: '5px', fontWeight: '600', color: '#374151', fontSize: '0.85rem' }}>
+                      Chief Name <span style={{ color: '#7C3AED' }}>*</span>
+                    </label>
+                    <input
+                      type="text"
+                      required
+                      placeholder="Full name"
+                      value={chiefForm.name}
+                      onChange={e => setChiefForm(p => ({ ...p, name: e.target.value }))}
+                      style={{
+                        width: '100%', padding: '10px 12px', border: '2px solid #e5e7eb',
+                        borderRadius: '10px', fontSize: '0.95rem', outline: 'none', boxSizing: 'border-box',
+                        transition: 'border-color 0.2s',
+                      }}
+                      onFocus={e => { e.target.style.borderColor = '#7C3AED'; }}
+                      onBlur={e => { e.target.style.borderColor = '#e5e7eb'; }}
+                    />
+                  </div>
+                  <div className="col-12 col-sm-6">
+                    <label style={{ display: 'block', marginBottom: '5px', fontWeight: '600', color: '#374151', fontSize: '0.85rem' }}>
+                      Email <span style={{ color: '#7C3AED' }}>*</span>
+                    </label>
+                    <input
+                      type="email"
+                      required
+                      placeholder="chief@email.com"
+                      value={chiefForm.email}
+                      onChange={e => setChiefForm(p => ({ ...p, email: e.target.value }))}
+                      style={{
+                        width: '100%', padding: '10px 12px', border: '2px solid #e5e7eb',
+                        borderRadius: '10px', fontSize: '0.95rem', outline: 'none', boxSizing: 'border-box',
+                        transition: 'border-color 0.2s',
+                      }}
+                      onFocus={e => { e.target.style.borderColor = '#7C3AED'; }}
+                      onBlur={e => { e.target.style.borderColor = '#e5e7eb'; }}
+                    />
+                  </div>
+                </div>
+
+                {/* Row: Mobile + Restaurant */}
+                <div className="row g-3 mb-3">
+                  <div className="col-12 col-sm-6">
+                    <label style={{ display: 'block', marginBottom: '5px', fontWeight: '600', color: '#374151', fontSize: '0.85rem' }}>
+                      Mobile Number <span style={{ color: '#7C3AED' }}>*</span>
+                    </label>
+                    <input
+                      type="tel"
+                      required
+                      placeholder="10-digit mobile"
+                      value={chiefForm.mobile}
+                      maxLength={15}
+                      onChange={e => setChiefForm(p => ({ ...p, mobile: e.target.value.replace(/\D/g, '') }))}
+                      style={{
+                        width: '100%', padding: '10px 12px', border: '2px solid #e5e7eb',
+                        borderRadius: '10px', fontSize: '0.95rem', outline: 'none', boxSizing: 'border-box',
+                        transition: 'border-color 0.2s',
+                      }}
+                      onFocus={e => { e.target.style.borderColor = '#7C3AED'; }}
+                      onBlur={e => { e.target.style.borderColor = '#e5e7eb'; }}
+                    />
+                  </div>
+                  <div className="col-12 col-sm-6">
+                    <label style={{ display: 'block', marginBottom: '5px', fontWeight: '600', color: '#374151', fontSize: '0.85rem' }}>
+                      Restaurant ID <span style={{ color: '#7C3AED' }}>*</span>
+                    </label>
+                    <input
+                      type="text"
+                      required
+                      placeholder="e.g. RESTO001"
+                      value={chiefForm.siteCode}
+                      onChange={e => setChiefForm(p => ({ ...p, siteCode: e.target.value.toUpperCase() }))}
+                      style={{
+                        width: '100%', padding: '10px 12px', border: '2px solid #e5e7eb',
+                        borderRadius: '10px', fontSize: '0.95rem', outline: 'none', boxSizing: 'border-box',
+                        fontFamily: 'monospace', fontWeight: '700', color: '#7C3AED',
+                        transition: 'border-color 0.2s',
+                      }}
+                      onFocus={e => { e.target.style.borderColor = '#7C3AED'; }}
+                      onBlur={e => { e.target.style.borderColor = '#e5e7eb'; }}
+                    />
+                    <small style={{ color: '#9ca3af', fontSize: '0.78rem', marginTop: '3px', display: 'block' }}>
+                      Pre-filled from your restaurant
+                    </small>
+                  </div>
+                </div>
+
+                {/* Password full-width */}
+                <div style={{ marginBottom: '20px' }}>
+                  <label style={{ display: 'block', marginBottom: '5px', fontWeight: '600', color: '#374151', fontSize: '0.85rem' }}>
+                    Password <span style={{ color: '#7C3AED' }}>*</span>
+                  </label>
+                  <div style={{ position: 'relative' }}>
+                    <input
+                      type={showChiefPassword ? 'text' : 'password'}
+                      required
+                      placeholder="Minimum 6 characters"
+                      value={chiefForm.password}
+                      onChange={e => setChiefForm(p => ({ ...p, password: e.target.value }))}
+                      style={{
+                        width: '100%', padding: '10px 44px 10px 12px', border: '2px solid #e5e7eb',
+                        borderRadius: '10px', fontSize: '0.95rem', outline: 'none', boxSizing: 'border-box',
+                        transition: 'border-color 0.2s',
+                      }}
+                      onFocus={e => { e.target.style.borderColor = '#7C3AED'; }}
+                      onBlur={e => { e.target.style.borderColor = '#e5e7eb'; }}
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setShowChiefPassword(p => !p)}
+                      style={{
+                        position: 'absolute', right: '12px', top: '50%', transform: 'translateY(-50%)',
+                        background: 'none', border: 'none', cursor: 'pointer', color: '#9ca3af', padding: '4px',
+                      }}
+                    >
+                      {showChiefPassword ? <FaEyeSlash /> : <FaEye />}
+                    </button>
+                  </div>
+                </div>
+
+                {/* Actions */}
+                <div className="d-flex gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setShowChiefModal(false)}
+                    style={{
+                      flex: 1, padding: '11px 16px', border: '2px solid #e5e7eb',
+                      borderRadius: '10px', background: '#fff', color: '#374151',
+                      fontWeight: '600', cursor: 'pointer', fontSize: '0.95rem',
+                      transition: 'all 0.2s',
+                    }}
+                    onMouseEnter={e => { e.currentTarget.style.background = '#f9fafb'; }}
+                    onMouseLeave={e => { e.currentTarget.style.background = '#fff'; }}
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="submit"
+                    disabled={chiefLoading}
+                    style={{
+                      flex: 2, padding: '11px 16px',
+                      background: chiefLoading ? '#c4b5fd' : 'linear-gradient(135deg, #7C3AED, #A78BFA)',
+                      color: '#fff', border: 'none', borderRadius: '10px',
+                      fontWeight: '700', cursor: chiefLoading ? 'not-allowed' : 'pointer',
+                      fontSize: '0.95rem', boxShadow: chiefLoading ? 'none' : '0 4px 12px rgba(124,58,237,0.3)',
+                      transition: 'all 0.2s',
+                    }}
+                  >
+                    {chiefLoading
+                      ? <span><span className="spinner-border spinner-border-sm me-2" role="status" />Creating…</span>
+                      : '✓ Create Chief'
+                    }
+                  </button>
+                </div>
+              </form>
+            </div>
+          </div>
+        </div>
+      )}
     </AdminLayout>
   );
 };
