@@ -1,7 +1,8 @@
-import React, { useEffect, useState } from 'react'
+import React, { useEffect, useState, useCallback } from 'react'
 import { Link, useSearchParams } from 'react-router-dom'
-import { FaCheckCircle, FaUtensils, FaMapMarkerAlt, FaCreditCard, FaWallet, FaMobileAlt, FaShoppingBag, FaBox } from 'react-icons/fa'
+import { FaCheckCircle, FaUtensils, FaCreditCard, FaWallet, FaMobileAlt, FaShoppingBag, FaBox } from 'react-icons/fa'
 import { useAuth } from '../../context/AuthContext'
+import { useSocket } from '../../context/SocketContext'
 import { API_BASE_URL } from '../../config/api'
 
 interface OrderItem {
@@ -24,6 +25,7 @@ interface Order {
 
 const OrderTracking: React.FC = () => {
   const { user } = useAuth()
+  const { socket } = useSocket()
   const [searchParams] = useSearchParams()
   const orderId = searchParams.get('orderId')
   const [paymentMethod, setPaymentMethod] = useState<string>('')
@@ -31,6 +33,49 @@ const OrderTracking: React.FC = () => {
   const [tableNumber, setTableNumber] = useState<string>('')
   const [order, setOrder] = useState<Order | null>(null)
   const [loading, setLoading] = useState(true)
+  const [statusFlash, setStatusFlash] = useState(false)
+
+  const fetchOrderDetails = useCallback(async () => {
+    if (!user?.id) return
+    setLoading(true)
+    try {
+      const siteCode = localStorage.getItem('siteCode') || ''
+      const response = await fetch(`${API_BASE_URL}/orders/user/${user.id}`, {
+        headers: { 'x-site-code': siteCode }
+      })
+      if (response.ok) {
+        const orders = await response.json()
+        const foundOrder = orders.find((o: Order) => o._id === orderId || o._id.slice(-8).toUpperCase() === orderId?.toUpperCase())
+        if (foundOrder) {
+          setOrder(foundOrder)
+          if (foundOrder.tableNumber) setTableNumber(foundOrder.tableNumber)
+        }
+      }
+    } catch (error) {
+      console.error('Error fetching order:', error)
+    } finally {
+      setLoading(false)
+    }
+  }, [user?.id, orderId])
+
+  const fetchLatestOrder = useCallback(async () => {
+    if (!user?.id) { setLoading(false); return }
+    setLoading(true)
+    try {
+      const siteCode = localStorage.getItem('siteCode') || ''
+      const response = await fetch(`${API_BASE_URL}/orders/user/${user.id}`, {
+        headers: { 'x-site-code': siteCode }
+      })
+      if (response.ok) {
+        const orders = await response.json()
+        if (orders.length > 0) setOrder(orders[0])
+      }
+    } catch (error) {
+      console.error('Error fetching order:', error)
+    } finally {
+      setLoading(false)
+    }
+  }, [user?.id])
 
   useEffect(() => {
     const method = sessionStorage.getItem('paymentMethod') || 'card'
@@ -40,68 +85,59 @@ const OrderTracking: React.FC = () => {
     setOrderType(type)
     setTableNumber(table)
 
-    // Fetch order details if orderId is provided
     if (orderId && user?.id) {
       fetchOrderDetails()
     } else {
-      // Fetch the most recent order for this user
       fetchLatestOrder()
     }
-  }, [orderId, user?.id])
+  }, [orderId, user?.id, fetchOrderDetails, fetchLatestOrder])
 
-  const fetchOrderDetails = async () => {
-    if (!user?.id) return
-    setLoading(true)
-    try {
-      const siteCode = localStorage.getItem('siteCode') || ''
-      const response = await fetch(`${API_BASE_URL}/orders/user/${user.id}`, {
-        headers: {
-          'x-site-code': siteCode
-        }
-      })
-      if (response.ok) {
-        const orders = await response.json()
-        const foundOrder = orders.find((o: Order) => o._id === orderId || o._id.slice(-8).toUpperCase() === orderId?.toUpperCase())
-        if (foundOrder) {
-          setOrder(foundOrder)
-          // Set table number from order if available
-          if (foundOrder.tableNumber) {
-            setTableNumber(foundOrder.tableNumber)
-          }
-        }
-      }
-    } catch (error) {
-      console.error('Error fetching order:', error)
-    } finally {
-      setLoading(false)
-    }
-  }
+  // Poll order status every 5 seconds so customer sees updates without refreshing
+  useEffect(() => {
+    if (!order?._id) return
 
-  const fetchLatestOrder = async () => {
-    if (!user?.id) {
-      setLoading(false)
-      return
-    }
-    setLoading(true)
-    try {
-      const siteCode = localStorage.getItem('siteCode') || ''
-      const response = await fetch(`${API_BASE_URL}/orders/user/${user.id}`, {
-        headers: {
-          'x-site-code': siteCode
-        }
-      })
-      if (response.ok) {
-        const orders = await response.json()
-        if (orders.length > 0) {
-          setOrder(orders[0]) // Get the most recent order
-        }
+    const currentOrderId = order._id
+
+    const poll = async () => {
+      try {
+        const siteCode = localStorage.getItem('siteCode') || ''
+        const res = await fetch(`${API_BASE_URL}/orders/${currentOrderId}`, {
+          headers: { 'x-site-code': siteCode }
+        })
+        if (!res.ok) return
+        const fresh: Order = await res.json()
+        setOrder(prev => {
+          if (!prev || prev.orderStatus === fresh.orderStatus) return prev
+          // Status changed — flash the badge
+          setStatusFlash(true)
+          setTimeout(() => setStatusFlash(false), 1500)
+          return { ...prev, orderStatus: fresh.orderStatus }
+        })
+      } catch {
+        // silent — next poll will retry
       }
-    } catch (error) {
-      console.error('Error fetching order:', error)
-    } finally {
-      setLoading(false)
     }
-  }
+
+    const interval = setInterval(poll, 5000)
+    return () => clearInterval(interval)
+  }, [order?._id])
+
+  // Also keep socket listener as instant-update layer on top of polling
+  useEffect(() => {
+    if (!socket) return
+
+    const handleStatusUpdate = ({ orderId: updatedId, status }: { orderId: string; status: string }) => {
+      setOrder(prev => {
+        if (!prev || prev._id.toString() !== updatedId.toString()) return prev
+        return { ...prev, orderStatus: status }
+      })
+      setStatusFlash(true)
+      setTimeout(() => setStatusFlash(false), 1500)
+    }
+
+    socket.on('order:status-updated', handleStatusUpdate)
+    return () => { socket.off('order:status-updated', handleStatusUpdate) }
+  }, [socket])
 
   const getPaymentIcon = () => {
     switch (paymentMethod) {
@@ -159,7 +195,22 @@ const OrderTracking: React.FC = () => {
             </div>
 
             <h3 className="fw-bold mb-1">Order Confirmed!</h3>
-            <p className="text-muted mb-4">Thank you for your payment.</p>
+            <p className="text-muted mb-2">Thank you for your payment.</p>
+            <div className="mb-3">
+              <span style={{
+                display: 'inline-flex', alignItems: 'center', gap: '6px',
+                background: statusFlash ? '#dcfce7' : '#f0fdf4',
+                color: '#16a34a', border: '1px solid #86efac',
+                borderRadius: '20px', padding: '3px 12px', fontSize: '0.78rem', fontWeight: '600',
+                transition: 'background 0.4s ease',
+              }}>
+                <span style={{
+                  width: '7px', height: '7px', borderRadius: '50%', background: '#22c55e',
+                  display: 'inline-block', animation: 'livePulse 1.5s infinite',
+                }} />
+                Tracking live
+              </span>
+            </div>
 
             {/* Order ID */}
             {order && (
@@ -254,6 +305,13 @@ const OrderTracking: React.FC = () => {
               View My Orders
             </Link>
           </div>
+
+          <style>{`
+            @keyframes livePulse {
+              0%, 100% { opacity: 1; transform: scale(1); }
+              50%       { opacity: 0.4; transform: scale(1.4); }
+            }
+          `}</style>
 
         </div>
       </div>

@@ -1,4 +1,5 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
+import { useSocket } from '../../context/SocketContext';
 import { useNavigate } from 'react-router-dom';
 import {
   FaShoppingCart,
@@ -117,6 +118,7 @@ const ProgressBar: React.FC<{ status: string }> = ({ status }) => {
 ═══════════════════════════════════════════════════════ */
 const ChiefDashboard: React.FC = () => {
   const navigate = useNavigate();
+  const { socket, joinSite } = useSocket();
   const [stats, setStats]           = useState<DashboardStats | null>(null);
   const [loading, setLoading]       = useState(true);
   const [error, setError]           = useState<string | null>(null);
@@ -125,6 +127,7 @@ const ChiefDashboard: React.FC = () => {
   const [drawerOpen, setDrawerOpen]   = useState(false);
   const [chiefName, setChiefName]     = useState('Chief');
   const [restaurantCode, setRestaurantCode] = useState('');
+  const [liveUpdate, setLiveUpdate]   = useState(false);
   const ordersPerPage = 8;
   const drawerRef = useRef<HTMLDivElement>(null);
 
@@ -138,19 +141,55 @@ const ChiefDashboard: React.FC = () => {
   }, [navigate]);
 
   /* fetch orders */
-  useEffect(() => {
-    (async () => {
-      try {
-        const token = localStorage.getItem('token') || '';
-        const res = await fetch(`${API_BASE_URL}/chief/orders/stats`, {
-          headers: { Authorization: `Bearer ${token}` },
-        });
-        if (res.ok) setStats(await res.json());
-        else setError('Failed to load dashboard data');
-      } catch { setError('Error connecting to server'); }
-      finally { setLoading(false); }
-    })();
+  const fetchOrders = useCallback(async () => {
+    try {
+      const token = localStorage.getItem('token') || '';
+      const res = await fetch(`${API_BASE_URL}/chief/orders/stats`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      if (res.ok) setStats(await res.json());
+      else setError('Failed to load dashboard data');
+    } catch { setError('Error connecting to server'); }
+    finally { setLoading(false); }
   }, []);
+
+  useEffect(() => { fetchOrders(); }, [fetchOrders]);
+
+  // Ensure chief is in the correct site room
+  useEffect(() => {
+    const siteCode = localStorage.getItem('siteCode') || '';
+    if (siteCode) joinSite(siteCode);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  useEffect(() => {
+    if (!socket) return;
+
+    const handleNewOrder = () => {
+      setLiveUpdate(true);
+      setTimeout(() => setLiveUpdate(false), 2000);
+      fetchOrders();
+    };
+
+    const handleStatusUpdate = ({ orderId, status }: { orderId: string; status: string }) => {
+      setStats(prev => {
+        if (!prev) return prev;
+        return {
+          ...prev,
+          recentOrders: prev.recentOrders.map(o =>
+            o._id === orderId ? { ...o, orderStatus: status, statusUpdatedAt: new Date().toISOString() } : o
+          ),
+        };
+      });
+    };
+
+    socket.on('order:new', handleNewOrder);
+    socket.on('order:status-updated', handleStatusUpdate);
+    return () => {
+      socket.off('order:new', handleNewOrder);
+      socket.off('order:status-updated', handleStatusUpdate);
+    };
+  }, [socket, fetchOrders]);
 
   /* close drawer on outside tap */
   useEffect(() => {
@@ -377,9 +416,24 @@ const ChiefDashboard: React.FC = () => {
 
           {/* Page title */}
           <div style={{ marginBottom: '20px' }}>
-            <h1 style={{ color: PURPLE, fontWeight: '800', fontSize: 'clamp(1.3rem, 5vw, 2rem)', margin: 0 }}>
-              Order Management
-            </h1>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '12px', flexWrap: 'wrap' }}>
+              <h1 style={{ color: PURPLE, fontWeight: '800', fontSize: 'clamp(1.3rem, 5vw, 2rem)', margin: 0 }}>
+                Order Management
+              </h1>
+              <span style={{
+                display: 'inline-flex', alignItems: 'center', gap: '6px',
+                background: liveUpdate ? '#dcfce7' : '#f0fdf4',
+                color: '#16a34a', border: '1px solid #86efac',
+                borderRadius: '20px', padding: '3px 10px', fontSize: '0.75rem', fontWeight: '600',
+                transition: 'background 0.4s ease',
+              }}>
+                <span style={{
+                  width: '7px', height: '7px', borderRadius: '50%', background: '#22c55e',
+                  display: 'inline-block', animation: 'livePulse 1.5s infinite',
+                }} />
+                Live
+              </span>
+            </div>
             <p style={{ color: '#6b7280', marginTop: '4px', fontSize: '0.88rem' }}>
               Restaurant: <strong style={{ color: PURPLE }}>{restaurantCode}</strong>
             </p>
@@ -789,11 +843,15 @@ const ChiefDashboard: React.FC = () => {
         </div>
       </main>
 
-      {/* slide-in animation */}
+      {/* animations */}
       <style>{`
         @keyframes slideIn {
           from { transform: translateX(-100%); opacity: 0; }
           to   { transform: translateX(0);    opacity: 1; }
+        }
+        @keyframes livePulse {
+          0%, 100% { opacity: 1; transform: scale(1); }
+          50%       { opacity: 0.4; transform: scale(1.4); }
         }
         /* hide scrollbar on filter chips */
         div::-webkit-scrollbar { display: none; }

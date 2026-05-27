@@ -1,5 +1,6 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { useSocket } from '../../context/SocketContext';
 import {
   FaShoppingCart,
   FaClock,
@@ -65,11 +66,13 @@ interface Chief {
 
 const Dashboard: React.FC = () => {
   const navigate = useNavigate();
+  const { socket, joinSite } = useSocket();
   const [stats, setStats] = useState<DashboardStats | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [currentPage, setCurrentPage] = useState(1);
   const [statusFilter, setStatusFilter] = useState<string>('ALL');
+  const [liveUpdate, setLiveUpdate] = useState(false);
   const ordersPerPage = 10;
 
   // Chiefs list
@@ -96,34 +99,64 @@ const Dashboard: React.FC = () => {
     if (!isAuthenticated || adminUser.role === 'chief') navigate('/admin');
   }, [navigate]);
 
-  useEffect(() => {
-    const fetchStats = async () => {
-      console.log('Fetching dashboard statistics');
-      try {
-        const siteCode = localStorage.getItem('siteCode') || ''
-        const response = await fetch(`${API_BASE_URL}/orders/stats`, {
-          headers: {
-            'x-site-code': siteCode
-          }
-        });
-        if (response.ok) {
-          const data = await response.json();
-          console.log('Dashboard stats:', data);
-          setStats(data);
-        } else {
-          console.error('Failed to fetch stats');
-          setError('Failed to load statistics');
-        }
-      } catch (err) {
-        console.error('Error fetching stats:', err);
-        setError('Error connecting to server');
-      } finally {
-        setLoading(false);
+  const fetchStats = useCallback(async () => {
+    try {
+      const siteCode = localStorage.getItem('siteCode') || '';
+      const response = await fetch(`${API_BASE_URL}/orders/stats`, {
+        headers: { 'x-site-code': siteCode }
+      });
+      if (response.ok) {
+        const data = await response.json();
+        setStats(data);
+      } else {
+        setError('Failed to load statistics');
       }
+    } catch (err) {
+      setError('Error connecting to server');
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  // Initial fetch
+  useEffect(() => { fetchStats(); }, [fetchStats]);
+
+  // Ensure admin is in the correct site room
+  useEffect(() => {
+    const siteCode = localStorage.getItem('siteCode') || '';
+    if (siteCode) joinSite(siteCode);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  useEffect(() => {
+    if (!socket) return;
+
+    const handleNewOrder = () => {
+      // Flash the live indicator and refetch
+      setLiveUpdate(true);
+      setTimeout(() => setLiveUpdate(false), 2000);
+      fetchStats();
     };
 
-    fetchStats();
-  }, []);
+    const handleStatusUpdate = ({ orderId, status }: { orderId: string; status: string }) => {
+      setStats(prev => {
+        if (!prev) return prev;
+        return {
+          ...prev,
+          recentOrders: prev.recentOrders.map(o =>
+            o._id === orderId ? { ...o, orderStatus: status, statusUpdatedAt: new Date().toISOString() } : o
+          ),
+        };
+      });
+    };
+
+    socket.on('order:new', handleNewOrder);
+    socket.on('order:status-updated', handleStatusUpdate);
+    return () => {
+      socket.off('order:new', handleNewOrder);
+      socket.off('order:status-updated', handleStatusUpdate);
+    };
+  }, [socket, fetchStats]);
 
   const fetchChiefs = async () => {
     setChiefsLoading(true);
@@ -346,12 +379,30 @@ const Dashboard: React.FC = () => {
       <div className="container-fluid py-4" style={{ backgroundColor: '#f8f9fa', minHeight: '100vh', color: '#212529' }}>
         {/* Header */}
         <div className="mb-4">
-          <h1 
-            className="display-6 fw-bold" 
-            style={{ color: '#4F46E5', margin: '20px 0px', marginTop: '0px', fontSize: '2.5rem'}}
-          >
-            Admin Dashboard
-          </h1>
+          <div className="d-flex align-items-center gap-3 flex-wrap">
+            <h1
+              className="display-6 fw-bold mb-0"
+              style={{ color: '#4F46E5', margin: '20px 0px', marginTop: '0px', fontSize: '2.5rem'}}
+            >
+              Admin Dashboard
+            </h1>
+            <span
+              style={{
+                display: 'inline-flex', alignItems: 'center', gap: '6px',
+                background: liveUpdate ? '#dcfce7' : '#f0fdf4',
+                color: '#16a34a', border: '1px solid #86efac',
+                borderRadius: '20px', padding: '4px 12px', fontSize: '0.78rem', fontWeight: '600',
+                transition: 'background 0.4s ease',
+              }}
+            >
+              <span style={{
+                width: '8px', height: '8px', borderRadius: '50%', background: '#22c55e',
+                display: 'inline-block',
+                animation: 'livePulse 1.5s infinite',
+              }} />
+              Live
+            </span>
+          </div>
           {error && (
             <div className="alert alert-warning" role="alert">
               {error}
@@ -1156,6 +1207,12 @@ const Dashboard: React.FC = () => {
           )}
         </div>
       </div>
+      <style>{`
+        @keyframes livePulse {
+          0%, 100% { opacity: 1; transform: scale(1); }
+          50%       { opacity: 0.4; transform: scale(1.4); }
+        }
+      `}</style>
       {/* ── Create Chief Modal (responsive) ── */}
       {showChiefModal && (
         <div

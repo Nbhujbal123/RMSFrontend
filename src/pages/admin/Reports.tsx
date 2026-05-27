@@ -126,6 +126,8 @@ const Reports: React.FC = () => {
         minHeight: '100vh',
         
       }}>
+
+
         <div className="row mb-4" style={{ marginTop: '0px' }}>
           <div className="col-12">
             <h1 className="display-5 fw-bold text-primary mb-4" style={{marginTop: '20px', fontSize: '2.5rem'}}>
@@ -133,6 +135,7 @@ const Reports: React.FC = () => {
             </h1>
           </div>
         </div>
+
 
         {/* Date Range Filter */}
         

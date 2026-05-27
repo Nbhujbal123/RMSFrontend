@@ -9,6 +9,7 @@ import LoadingSpinner from './components/LoadingSpinner'
 import { ToastProvider, setToastFunction, useToast } from './components/Toast'
 import { CartProvider, useCart } from './context/CartContext'
 import { AuthProvider } from './context/AuthContext'
+import { SocketProvider } from './context/SocketContext'
 import WelcomePage from './components/WelcomePage.jsx'
 
 // Lazy load all route components for code splitting
@@ -69,9 +70,11 @@ function App() {
     <ErrorBoundary>
       <ToastProvider>
         <AuthProvider>
-          <CartProvider>
-              <AppContent />
-          </CartProvider>
+          <SocketProvider>
+            <CartProvider>
+                <AppContent />
+            </CartProvider>
+          </SocketProvider>
         </AuthProvider>
       </ToastProvider>
     </ErrorBoundary>
