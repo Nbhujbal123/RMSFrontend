@@ -12,7 +12,8 @@ import {
   FaCheckCircle,
   FaTimesCircle,
   FaUserShield,
-  FaUsers
+  FaUsers,
+  FaTrash
 } from "react-icons/fa";
 import { toast } from "../../components/Toast";
 import SuperAdminLayout from "./SuperAdminLayout";
@@ -66,6 +67,25 @@ const ViewRestaurants = () => {
       );
     } catch (err) {
       toast.error(err.response?.data?.message || "Failed to update restaurant status");
+    }
+  };
+
+  const deleteRestaurant = async (siteCode, name) => {
+    try {
+      const token = localStorage.getItem("token");
+      if (!token) {
+        toast.error("You are not logged in. Please login again.");
+        navigate("/superadmin/login");
+        return;
+      }
+      await axios.delete(
+        `${API_BASE_URL}/superadmin/restaurants/${siteCode.toUpperCase()}`,
+        { headers: { Authorization: `Bearer ${token}` } }
+      );
+      fetchRestaurants();
+      toast.success(`"${name}" has been deleted.`);
+    } catch (err) {
+      toast.error(err.response?.data?.message || "Failed to delete restaurant");
     }
   };
 
@@ -328,6 +348,18 @@ const ViewRestaurants = () => {
                               <FaPowerOff />
                             </button>
                           )}
+                          <button
+                            className="btn btn-sm"
+                            title="Delete Restaurant"
+                            style={{ borderRadius: "8px", background: "rgba(239,68,68,0.12)", color: "#dc2626", border: "1.5px solid rgba(239,68,68,0.25)", padding: "6px 10px" }}
+                            onClick={() => {
+                              if (window.confirm(`Are you sure you want to permanently delete "${restaurant.name}"? This action cannot be undone.`)) {
+                                deleteRestaurant(restaurant.siteCode, restaurant.name);
+                              }
+                            }}
+                          >
+                            <FaTrash />
+                          </button>
                         </div>
                       </td>
                     </tr>
@@ -439,6 +471,17 @@ const ViewRestaurants = () => {
                         <FaPowerOff className="me-1" /> Activate
                       </button>
                     )}
+                    <button
+                      className="btn btn-sm flex-fill"
+                      style={{ borderRadius: "8px", background: "rgba(239,68,68,0.12)", color: "#dc2626", border: "1.5px solid rgba(239,68,68,0.25)", fontWeight: 600, fontSize: "12.5px", padding: "8px" }}
+                      onClick={() => {
+                        if (window.confirm(`Are you sure you want to permanently delete "${restaurant.name}"? This action cannot be undone.`)) {
+                          deleteRestaurant(restaurant.siteCode, restaurant.name);
+                        }
+                      }}
+                    >
+                      <FaTrash className="me-1" /> Delete
+                    </button>
                   </div>
                 </div>
               </div>
