@@ -1,4 +1,5 @@
-name: Frontend CI Pipeline
+
+name: React Frontend CI
 
 on:
   push:
@@ -12,7 +13,7 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      - name: Get source code
+      - name: Download project code
         uses: actions/checkout@v4
 
       - name: Install Node.js
