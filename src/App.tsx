@@ -99,7 +99,10 @@ function AppContent() {
   // Scroll to top on every page navigation
   useEffect(() => {
     window.scrollTo(0, 0)
+
+    
   }, [location.pathname])
+
 
   // Store siteCode from URL to localStorage when user visits the site
   useEffect(() => {
